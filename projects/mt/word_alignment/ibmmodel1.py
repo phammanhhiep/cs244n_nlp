@@ -1,5 +1,5 @@
 from collections import defaultdict
-import random, heapq
+import random
 
 class IBMModel1 ():
 	def __init__ (self, source_corpus, target_corpus):
@@ -25,8 +25,12 @@ class IBMModel1 ():
 				m = len (source_sent)
 				for i in range (m):
 					sw = source_sent[i]
-					for j in range (l):
-						tw = target_sent[j]
+					for j in range (l + 1):
+						if j == 0: # add count of NULL word
+							tw = '_NULL_'
+						else:			
+							tw = target_sent[j - 1]
+
 						delta = get_delta (q, t, target_sent, sw, j, i, m=m, l=l)
 						
 						# update word count
@@ -46,7 +50,6 @@ class IBMModel1 ():
 	@staticmethod
 	def get_q (alignment_counts=None, q=None, source_corpus=None, target_corpus=None):
 		# calculate the aligment conditional probability
-		# FIX. Need to incorporate NULL word
 		q = {} if q is None else q
 		if alignment_counts is None and source_corpus is not None and target_corpus is not None: # initialization
 			pair_num = len (target_corpus)
@@ -56,7 +59,7 @@ class IBMModel1 ():
 				l = len (target_sent)
 				m = len (source_sent)
 				for i in range (m):
-					for j in range (l):
+					for j in range (l + 1): # add 1 more to account for the NULL word
 						q[(j,i,l,m)] = 1 / (l)
 		else: pass
 		return q
@@ -64,7 +67,6 @@ class IBMModel1 ():
 	@staticmethod
 	def get_t (word_counts=None, t=None):
 		# calculate the translation conditional probability
-		# FIX. Need to incorporate NULL word
 		t = {} if (t is None) else t
 		if word_counts is None: # initialization
 			random.seed ()
@@ -79,44 +81,27 @@ class IBMModel1 ():
 
 	@staticmethod	
 	def get_delta (q=None, t=None, tsent=None, sw=None, j=None, i=None, m=None, l=None):
-		tsent_t_sum = 0
-		tsent_len = len (tsent)
-		tw = tsent[j]
-		for x in range (tsent_len):
-			current_tw = tsent[x]
-			tsent_t_sum += t[sw][current_tw]
-		delta = t[sw][tw] / tsent_t_sum
+		if j == 0: # account for the NULL word
+			delta = 1 / (len (tsent) + 1)
+		else:
+			tsent_t_sum = 0
+			tsent_len = len (tsent)
+			tw = tsent[j-1]
+			for x in range (tsent_len):
+				current_tw = tsent[x]
+				tsent_t_sum += t[sw][current_tw]
+			tsent_t_sum += t[sw]['_NULL_'] # Acount for NULL word	
+			delta = t[sw][tw] / tsent_t_sum
 		return delta
-
-	def get_alignment_p (self, sw, m): pass
-		# confitional probability of a single source word p (fj,a|ei)
-		# alignment p for a single word only
-
-	def get_translation_p (self): pass
-
-		# translation p for a single word only
 
 	def estimate_translation_parameters (self, iteration=3, t=None, q=None):
 		self.q, self.t = self.run_em (self.source_corpus, self.target_corpus, self.get_q, self.get_t, self.get_delta, iteration, q, t)
-
-	def get_translation_candidates (self, source_sent, cutoff=3):
-		# assume source_sent is ready for translation, i.e. no need to do any preprocess
-		# cutoff: number of candidate picked for each source word
-		translations = {}
-		for w in source_sent:
-			translations[w] = {'candidate': []}
-			if self.t.get (w, None) is None: continue
-			else:
-				for target_word, t_value in self.t[w].items ():
-					translations[w]['candidate'].append ({target_word: t_value})
-					if len (translations[w]['candidate']) > cutoff:
-						translations[w]['candidate'] = heapq.nlargest (cutoff, translations[w]['candidate'], key=lambda x: list (x.values ())[0])
-		return translations
 
 	def align (self, source_sent, target_sent):
 		# get the alignment vector
 		# assume the training corpora including words in source and target sentence
 		alignments = []
+		target_sent.insert (0, '_NULL_')
 		l = len (target_sent)
 		m = len (source_sent)
 
@@ -190,13 +175,13 @@ if __name__ == '__main__':
 	# source_sample = sample_data_dir + 'bg'
 	# source_sample = sample_data_dir + 'vn'
 
-	sd.sample_data (source, target, source_sample, target_sample, 200)
+	sd.sample_data (source, target, source_sample, target_sample, 1000)
 
 	# input_ss = "Tôi có thể sống với những tiêu chuẩn tối thiểu này, nhưng tôi sẽ yêu cầu Ủy ban giám sát tình hình một cách cẩn thận."
 	# input_ts = "I can live with these minimum standards, but I would ask the Commission to monitor the situation very carefully."
 
-	input_ss = "C'est ce que nous demandons aujourd'hui au commissaire."
-	input_ts = "This is what we are today asking the Commissioner for."
+	input_ss = "Monsieur le Président, nous débattons une fois de plus de la politique européenne de concurrence."
+	input_ts = "Mr President, once again we are debating the European Union' s competition policy."
 
 
 	scorpus = []

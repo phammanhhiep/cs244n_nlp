@@ -1,6 +1,6 @@
 from nltk import sent_tokenize, word_tokenize
 from collections import defaultdict
-import random, heapq
+import random
 
 class PMI ():
 	# Poinwise mutual information
@@ -68,10 +68,15 @@ class PMI ():
 			for i in range (m):
 				sw = ssent[i]
 				parameters['source'][sw]['count'] += self.count_occur (sw, ssent)
-				for j in range (l):
-					tw = tsent[j]
-					parameters['target'][tw]['count'] += self.count_occur (tw, tsent)
-					parameters['source'][sw]['align'][tw]['count'] += self.count_alignment (sw, tw, ssent, tsent)
+				for j in range (l + 1):
+					if j == 0:
+						tw = '_NULL_'
+						parameters['target'][tw]['count'] += 1
+						parameters['source'][sw]['align'][tw]['count'] += 1						
+					else:
+						tw = tsent[j-1]
+						parameters['target'][tw]['count'] += self.count_occur (tw, tsent)
+						parameters['source'][sw]['align'][tw]['count'] += self.count_alignment (sw, tw, ssent, tsent)
 
 		self.parameters = self.get_p (parameters)
 
@@ -79,6 +84,7 @@ class PMI ():
 		# get the alignment vector
 		# assume the training corpora including words in source and target sentence
 		alignments = []
+		target_sent.insert (0, '_NULL_')
 		l = len (target_sent)
 		m = len (source_sent)
 
@@ -87,17 +93,19 @@ class PMI ():
 			alignments.append (None)
 			for j in range (l):
 				tw = target_sent[j]
-				alignments[i] = self.get_best_alignment (alignments[i], sw, tw, j)
+				alignments[i] = self.get_best_alignment (alignments[i], sw, tw, j,i,l,m)
 
 		return alignments
 
-	def get_best_alignment (self, alignment, sw, tw, cur_index):
+	def get_best_alignment (self, alignment, sw, tw, j,i,l,m, null_pmi=1):
 		cur_tw = self.parameters['source'][sw]['align'].get (tw, None)
 		if cur_tw is None: pass
 		else:
 			cur_pmi = cur_tw['pmi']
 			if alignment is None or (cur_pmi > alignment['pmi']):
-				alignment = {'pmi': cur_pmi, 'index': cur_index, 'sw': sw, 'tw': tw}
+				alignment = {'pmi': cur_pmi, 'index': j, 'sw': sw, 'tw': tw}
+		if alignment is None and (j == l-1):
+			alignment = {'pmi': null_pmi, 'index': 0, 'sw': sw, 'tw': '_NULL_'}
 		return alignment		
 
 	def get_alignment_indices (self, alignments):
@@ -159,6 +167,7 @@ if __name__ == '__main__':
 	alignments = pmi.align (input_ss, input_ts)
 	avector = pmi.get_alignment_indices (alignments)
 	awords = pmi.get_alignment_words (alignments)
+	# print (pmi.parameters[])
 	print (avector)
 	print (awords)
 	print (input_ss)
