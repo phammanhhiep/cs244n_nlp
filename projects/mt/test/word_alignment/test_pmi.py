@@ -3,7 +3,7 @@ sys.path.insert (0, os.getcwd ())
 
 from collections import defaultdict
 import pytest
-import wordAlignment
+import wordAlignment.pmi
 
 def test_align (): pass
 

@@ -4,7 +4,8 @@ import random, heapq
 import sys, os
 sys.path.insert (0, os.getcwd ())
 import word_alignment.ibmmodel1
-IBMModel1 = word_alignment.ibmmodel1.IBMModel1
+# IBMModel1 = word_alignment.ibmmodel1.IBMModel1
+IBMModel1 = word_alignment.ibmmodel1.IBMModel1S
 
 class IBMModel2 (IBMModel1):
 	def __init__ (self, source_corpus, target_corpus):
@@ -79,13 +80,16 @@ if __name__ == '__main__':
 	# source_sample = sample_data_dir + 'bg'
 	# source_sample = sample_data_dir + 'vn'
 
-	sd.sample_data (source, target, source_sample, target_sample, 100)
+	sd.sample_data (source, target, source_sample, target_sample, 500)
 
 	# input_ss = "Tôi có thể sống với những tiêu chuẩn tối thiểu này, nhưng tôi sẽ yêu cầu Ủy ban giám sát tình hình một cách cẩn thận."
 	# input_ts = "I can live with these minimum standards, but I would ask the Commission to monitor the situation very carefully."
 
-	input_ss = "Monsieur le Président, nous débattons une fois de plus de la politique européenne de concurrence."
-	input_ts = "Mr President, once again we are debating the European Union' s competition policy."
+	# input_ss = "Monsieur le Président, nous débattons une fois de plus de la politique européenne de concurrence."
+	# input_ts = "Mr President, once again we are debating the European Union' s competition policy."
+
+	input_ss = "Le sixième rapport de la Commission européenne tire des conclusions très précieuses."
+	input_ts = "The European Commission' s sixth report presents very valuable conclusions."
 
 	scorpus = []
 	tcorpus = []
@@ -97,16 +101,17 @@ if __name__ == '__main__':
 	input_ss = word_tokenize(input_ss)
 	input_ts = word_tokenize(input_ts)
 	ignore_null = False
+	null_num = 2
 	ibm1 = None
 
 	# IBM Model 1
 	ibm1 = IBMModel1 (scorpus, tcorpus)
-	ibm1.estimate_translation_parameters (iteration=5, ignore_null=ignore_null)
+	ibm1.estimate_translation_parameters (iteration=5, ignore_null=ignore_null, null_num=null_num)
 	default_t = None if ibm1 is None else ibm1.t
 
 	# IBM model 2
 	ibm2 = IBMModel2 (scorpus, tcorpus)
-	ibm2.estimate_translation_parameters (iteration=5, t=default_t, ignore_null=ignore_null)
+	ibm2.estimate_translation_parameters (iteration=5, t=default_t, ignore_null=ignore_null, null_num=null_num)
 	alignments = ibm2.align (input_ss, input_ts, ignore_null=ignore_null)
 	avector = ibm2.get_alignment_indices (alignments)
 	awords = ibm2.get_alignment_words (alignments)
