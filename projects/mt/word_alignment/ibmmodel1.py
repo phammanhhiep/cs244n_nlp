@@ -56,58 +56,18 @@ class IBMModel1 ():
 		self.evaluation = evaluation
 		self.source_corpus = source_corpus
 		self.target_corpus = target_corpus
-
-	def run_em (self, source_corpus, target_corpus, get_q=None, get_t=None, get_delta=None, iteration=3, q=None, t=None, ignore_null=False, null_num=1, init_t=None):
-		# Estimation maximization
-		# using for IBM model 1 and 2	
-
-		q = get_q (source_corpus=source_corpus, target_corpus=target_corpus) if q is None else q
-		t = get_t (init_t=init_t) if t is None else t
-
-		for s in range (iteration):
-			word_counts = defaultdict (lambda: {'count': 0, 'align': defaultdict (lambda: 0, {})}, {})
-			alignment_counts = defaultdict (lambda: {'count': 0, 'align': defaultdict (lambda: 0, {})}, {})
-			pair_num = len (source_corpus)
-			for k in range (pair_num):
-				target_sent = target_corpus[k]
-				source_sent = source_corpus[k]
-				if not ignore_null: # add NULL word
-					null_words = ['_NULL_']
-					target_sent = null_words + target_sent 
-				l = len (target_sent)
-				m = len (source_sent)
-				for i in range (m):
-					sw = source_sent[i]
-					for j in range (l):
-						tw = target_sent[j]
-						delta = get_delta (q, t, target_sent, sw, j, i + 1, m=m, l=l, ignore_null=ignore_null)
-						
-						# update word count
-						word_counts[tw]['count'] += delta
-						word_counts[tw]['align'][sw] += delta
-
-						# update index alignment count
-						alignment_counts[(i + 1, l, m)]['count'] += delta
-						alignment_counts[(i + 1, l, m)]['align'][j] += delta
-
-			# update q, t
-			q = get_q (alignment_counts=alignment_counts, q=q, ignore_null=ignore_null)
-			t = get_t (word_counts=word_counts, t=t, null_num=null_num)
-
-		return q,t	
-
-	@staticmethod
-	def get_q (alignment_counts=None, q=None, source_corpus=None, target_corpus=None, ignore_null=False, default_q=0.1):
+	
+	def get_q (self, alignment_counts=None, q=None, source_corpus=None, target_corpus=None, default_q=0.1):
 		# calculate the aligment conditional probability
 		# default_q is p for unseen (j,i,l,m) tuple
+
 		q = defaultdict (lambda: default_q, {}) if q is None else q
 		if alignment_counts is None and source_corpus is not None and target_corpus is not None: # initialization
 			pair_num = len (target_corpus)
 			for k in range (pair_num):
 				target_sent = target_corpus[k]
 				source_sent = source_corpus[k]
-				if not ignore_null:
-					target_sent = ['_NULL_'] + target_sent # add NULL word
+				target_sent = ['_NULL_'] + target_sent # add NULL word
 				l = len (target_sent)
 				m = len (source_sent)
 				for i in range (m):
@@ -116,16 +76,13 @@ class IBMModel1 ():
 		else: pass
 		return q
 
-	def get_t (self, word_counts=None, t=None, init_t=None, null_num=1):
+	def get_t (self, word_counts=None, t=None, init_t=None, null_num=1, init_null=None):
 		# calculate the translation conditional probability
 		t = {} if (t is None) else t
 		if word_counts is None: # initialization
-			if init_t is not None:
-				t = init_t
-			else:
-				random.seed ()
-				init_value = random.random ()
-				t = defaultdict (lambda: defaultdict (lambda: init_value, {}), {})
+			random.seed ()
+			init_value = random.random ()
+			t = defaultdict (lambda: defaultdict (lambda: init_value, {}), {})
 		else:
 			for tw,v in word_counts.items ():
 				tw_count = v['count']
@@ -136,25 +93,52 @@ class IBMModel1 ():
 						t[sw][tw] = align_count / tw_count
 		return t 
 
-	# NeedFix: address problem of assign too much probability mass to NULL word	
-	@staticmethod	
-	def get_delta (q=None, t=None, tsent=None, sw=None, j=None, i=None, m=None, l=None, ignore_null=False):
-		if j == 0 and (not ignore_null): # for the NULL word
-			delta = 1 / (len (tsent) + 1)
-		else:
-			tsent_t_sum = 0
-			tsent_len = len (tsent)
-			tw = tsent[j]
-			for x in range (tsent_len):
-				current_tw = tsent[x]
-				tsent_t_sum += t[sw][current_tw]
-			delta = t[sw][tw] / tsent_t_sum
+	def get_delta (self, q=None, t=None, tsent=None, sw=None, j=None, i=None, m=None, l=None):
+		tsent_t_sum = 0
+		tsent_len = len (tsent)
+		tw = tsent[j]
+		for x in range (tsent_len):
+			current_tw = tsent[x]
+			tsent_t_sum += t[sw][current_tw]
+		delta = t[sw][tw] / tsent_t_sum
 		return delta
 
-	def estimate_translation_parameters (self, iteration=3, t=None, q=None, ignore_null=False, null_num=1, init_t=None):
-		self.q, self.t = self.run_em (self.source_corpus, self.target_corpus, self.get_q, self.get_t, self.get_delta, iteration, q, t, ignore_null=ignore_null, null_num=null_num, init_t=init_t)
+	def em_count (self, target_corpus, source_corpus, q, t, get_delta):
+		word_counts = defaultdict (lambda: {'count': 0, 'align': defaultdict (lambda: 0, {})}, {})
+		alignment_counts = defaultdict (lambda: {'count': 0, 'align': defaultdict (lambda: 0, {})}, {})
+		pair_num = len (source_corpus)
+		for k in range (pair_num):
+			target_sent = target_corpus[k]
+			source_sent = source_corpus[k]
+			null_words = ['_NULL_']
+			target_sent = null_words + target_sent 
+			l = len (target_sent)
+			m = len (source_sent)
+			for i in range (m):
+				sw = source_sent[i]
+				for j in range (l):
+					tw = target_sent[j]
+					delta = get_delta (q, t, target_sent, sw, j, i, m=m, l=l)
+					# update word count
+					word_counts[tw]['count'] += delta
+					word_counts[tw]['align'][sw] += delta
 
-	def align (self, source_sent, target_sent, ignore_null=False):
+					# update index alignment count
+					alignment_counts[(i + 1, l, m)]['count'] += delta
+					alignment_counts[(i + 1, l, m)]['align'][j] += delta
+
+		return word_counts, alignment_counts
+
+	def estimate_translation_parameters (self, iteration=3, t=None, q=None, null_num=1, init_t=None, init_null=None):
+		self.q = self.get_q (source_corpus=self.source_corpus, target_corpus=self.target_corpus) if q is None else q
+		self.t = self.get_t (init_t=init_t) if t is None else t
+
+		for s in range (iteration):
+			word_counts, alignment_counts = self.em_count (self.target_corpus, self.source_corpus, self.q, self.t, self.get_delta)
+			self.q = self.get_q (alignment_counts=alignment_counts, q=self.q)
+			self.t = self.get_t (word_counts=word_counts, t=self.t, null_num=null_num, init_null=init_null)
+
+	def align (self, source_sent, target_sent):
 		# get the alignment vector
 		# assume the training corpora including words in source and target sentence
 		alignments = []
@@ -167,33 +151,33 @@ class IBMModel1 ():
 			alignments.append (None)
 			for j in range (l):
 				tw = target_sent[j]
-				alignments[i] = self.get_best_alignment (alignments[i], sw, tw, j,i,l,m, ignore_null=ignore_null)
+				alignments[i] = self.get_best_alignment (alignments[i], sw, tw, j,i,l,m)
 
 		return alignments
 
 	# NeedFix: optimize null_p	
-	def get_best_alignment (self, alignment, sw, tw, j,i,l,m, null_p=0.00001, ignore_null=False):
+	def get_best_alignment (self, alignment, sw, tw, j,i,l,m, null_p=0.00001):
 		# p = p (a,fi|ej) = t 
 		# use index of -1 to indicate sw is aligned with NULL word and sw is not in the training corpora.
 		# if ignore_null is False, then index of -1 and 0 are both refer to the NULL word
 
 		p = self.t[sw].get (tw, -1)
 		if p == -1: pass
-		if j == 0 and ignore_null: return alignment
 		else:
 			if alignment is None or (p > alignment['p']):
 				alignment = {'p': p, 'sw': sw, 'tw': tw, 'index': j}
 		if alignment is None and (j == l-1):
-			alignment = {'p': null_p, 'sw': sw, 'tw': '_NULL_', 'index': 0} # special index
+			alignment = {'p': null_p, 'sw': sw, 'tw': '_NULL_', 'index': 0}
 		return alignment
 
 	def get_alignment_indices (self, alignment):
 		# get alignment indices of a sentence pair
+		# Source sentence has no NULL word. So word indices are i + 1
 		indices = []
 		anum = len (alignment)
 		for i in range (anum):
 			a = alignment[i]
-			indices.append ((a['index'], i+1)) # Source sentence has no NULL word. So word indices are i + 1
+			indices.append ((a['index'], i+1)) 
 		return indices
 
 	def get_alignment_words (self, alignment):
@@ -225,14 +209,35 @@ class IBMModel1 ():
 class Smoothed (IBMModel1):
 	# smoothing with uniform distribution to deal with rare words
 	# initialize using LLS
-	def __init__ (self, source_corpus, target_corpus, n=0.01, v_wc=12, v_bonus=100):
+	def __init__ (self, source_corpus, target_corpus, added_count=0.01, v_wc=12, v_bonus=100):
 		# v_wc: assumed average length of a source sentence
-		# v_bonus: to make sure v > source vocabulary 		
+		# v_bonus: to make sure v > source vocabulary
+		# added_count: addictive count number 	
 		IBMModel1.__init__ (self, source_corpus, target_corpus)
-		self.n = n
+		self.added_count = added_count
 		self.V = len (self.source_corpus) * v_wc + v_bonus
 	
-	def _get_wc (self, ignore_null, null_num):	
+
+	def get_t (self, word_counts=None, t=None, init_t=None, null_num=1, init_null=None):
+		# calculate the translation conditional probability
+		# NeedToFix: Need to assign probability mass to unseen word
+		t = {} if (t is None) else t
+		if word_counts is None: # initialization
+			random.seed ()
+			init_value = random.random ()		
+			t = defaultdict (lambda: defaultdict (lambda: init_value, {}), {})
+		else:
+			for tw,v in word_counts.items ():
+				tw_count = v['count']
+				for sw, align_count in v['align'].items ():
+					if tw == '_NULL_':
+						t[sw][tw] = null_num * align_count / tw_count
+					else:					
+						t[sw][tw] = (align_count + self.added_count) / (tw_count + self.added_count * self.V) # Smoothing
+		return t	
+
+class Heuristic (IBMModel1):
+	def _get_wc (self):	
 		# get word count of each source word and the coocurrence with each of its target words	
 		sent_num = len (self.source_corpus)
 
@@ -248,9 +253,8 @@ class Smoothed (IBMModel1):
 		for k in range (sent_num):
 			ssent = self.source_corpus[k]
 			tsent = self.target_corpus[k]
-			if not ignore_null: # add NULL word
-				null_words = ['_NULL_' for a in range (null_num)]
-				tsent = null_words + tsent 			
+			null_words = ['_NULL_']
+			tsent = null_words + tsent 			
 			l = len (tsent)
 			m = len (ssent)
 			parameters['_stat']['source']['word_count'] += m
@@ -265,15 +269,21 @@ class Smoothed (IBMModel1):
 
 		return parameters
 
-	def _get_llr (self, parameters, exponent):
+	# NeedFix: remove negative llr
+	# NeedFix: Add n NULL word	
+	def _get_llr (self, parameters, exponent=None):
 		# get log likelihood ratio of each word pair
+		# assign the unigram p of a source word for LLR of NULL and the source word
 		largest_llr_sum = 0
 		for tw, tw_v in parameters['target'].items ():
 			tw_count = tw_v['count']
 			for sw, align_v in tw_v['align'].items ():
 				sw_priori_p = parameters['source'][sw]['count'] / parameters['_stat']['source']['word_count']
-				sw_cond_p = align_v['count'] / tw_count
-				align_v['llr'] = align_v['count'] * math.log (sw_cond_p / sw_priori_p)
+				if tw == '_NULL_':
+					align_v['llr'] = align_v['count'] * math.log (sw_priori_p) 
+				else:
+					sw_cond_tw_p = align_v['count'] / tw_count # p (fi|ei)
+					align_v['llr'] = align_v['count'] * math.log (sw_cond_tw_p / sw_priori_p)
 				align_v['llr'] = self._llr_to_exp (align_v['llr'], exponent)
 				tw_v['llr_sum'] += align_v['llr']
 			largest_llr_sum = largest_llr_sum if largest_llr_sum > tw_v['llr_sum'] else tw_v['llr_sum']
@@ -282,7 +292,7 @@ class Smoothed (IBMModel1):
 
 	def _llr_to_exp (self, llr, exponent=3):
 		# raise llr to an exponent
-		return math.pow (exponent, llr)
+		return math.pow (llr, exponent)
 
 	def _llr_to_p (self, parameters):
 		# convert log likelihood ratio to corresponding probability
@@ -290,16 +300,16 @@ class Smoothed (IBMModel1):
 		for tw, tw_v in parameters['target'].items ():
 			for sw, align_v in tw_v['align'].items ():
 				align_v['llr_p'] = align_v['llr'] / largest_llr_sum
-
 		return parameters
 
-	def get_init_t (self, ignore_null=False, null_num=1, exponent=3):
-		parameters = self._get_wc (ignore_null=ignore_null, null_num=null_num)
+	def get_init_t (self, exponent=3):
+		parameters = self._get_wc ()
 		parameters = self._get_llr (parameters, exponent)
 		parameters = self._llr_to_p (parameters)
 		return parameters
 
-	def get_t (self, word_counts=None, t=None, init_t=None):
+	# NeedFix: review when to init_null occurs in the code. Likely when init t	
+	def get_t (self, word_counts=None, t=None, init_t=None, init_null=None, null_num=1):
 		# calculate the translation conditional probability
 		# NeedToFix: Need to assign probability mass to unseen word
 		t = {} if (t is None) else t
@@ -315,13 +325,13 @@ class Smoothed (IBMModel1):
 			for tw,v in word_counts.items ():
 				tw_count = v['count']
 				for sw, align_count in v['align'].items ():
-					t[sw][tw] = (align_count + self.n) / (tw_count + self.n * self.V) # Smoothing	
-
-		return t 	
-
-	def optimized_n (self, n=None): pass	
-
-class Heuristic (IBMModel1): pass
+					if tw == '_NULL_':
+						if init_null is not None: pass
+						else:
+							t[sw][tw] = null_num * align_count / tw_count
+					else:
+						t[sw][tw] = align_count / tw_count
+		return t
 
 class Combined (IBMModel1): pass
 
@@ -337,7 +347,7 @@ if __name__ == '__main__':
 	scorpus = []
 	tcorpus = []
 
-	filenumber = 3
+	filenumber = 5
 
 	for i in range (filenumber):
 		with open (target_file.format (i+1)) as efd, open (source_file.format (i+1)) as ffd:
@@ -379,29 +389,31 @@ if __name__ == '__main__':
 		trial_alignment = [word_tokenize (i) for i in afd]
 		trial_alignment = get_trial_alignments (trial_alignment, len (trial_scorpus))
 
-	# IBM Model 1
+	print ('- Model 1 Standard -')
 	ibm1 = IBMModel1 (scorpus, tcorpus)
 	ibm1.estimate_translation_parameters (iteration=2)
 	aer, recall, precision = ibm1.evaluate (trial_scorpus, trial_tcorpus, trial_alignment)
 	print (aer, recall, precision)
-	print ('----------- END -----------')
+	print ('----END ----')
 
-	# # IBM Model 1 uniform smoothing
-	# n = 0.01
-	# v_wc=10
-	# v_bonus=100
-	# exponent = 3
-	# null_num = 2
-	# smoothed = Smoothed (scorpus, tcorpus, n, v_wc, v_bonus)
-	# init_t = smoothed.get_init_t (ignore_null=ignore_null, null_num=null_num, exponent=exponent)
-	# smoothed.estimate_translation_parameters (iteration=5, ignore_null=ignore_null, null_num=null_num,  init_t=init_t)
-	# alignments = smoothed.align (input_ss, input_ts, ignore_null=ignore_null)
-	# avector = smoothed.get_alignment_indices (alignments)
-	# awords = smoothed.get_alignment_words (alignments)
-	# # print (smoothed.t)
-	# # print (alignments)
-	# print (avector)
-	# print (awords)
-	# print (input_ss)
-	# print (input_ts)
-	# print ('----------- END -----------')
+	print ('- Model 1 Smoothed -')
+	added_count = 0.01
+	v_wc=10
+	v_bonus=100
+	null_num = 3
+	smoothed = Smoothed (scorpus, tcorpus, added_count, v_wc, v_bonus)
+	smoothed.estimate_translation_parameters (iteration=4, null_num=null_num)
+	aer, recall, precision = smoothed.evaluate (trial_scorpus, trial_tcorpus, trial_alignment)
+	print (aer, recall, precision)
+	print ('----END ----')
+
+	print ('- Model 1 Heuristic -')
+	null_num = 3
+	init_null = None
+	exponent = 3
+	heu = Heuristic (scorpus, tcorpus)
+	init_t = heu.get_init_t (exponent=exponent)
+	heu.estimate_translation_parameters (iteration=4, null_num=null_num, init_t=init_t, init_null=init_null)
+	aer, recall, precision = heu.evaluate (trial_scorpus, trial_tcorpus, trial_alignment)
+	print (aer, recall, precision)
+	print ('----END ----')
