@@ -57,26 +57,27 @@ class IBMModel1 ():
 		self.source_corpus = source_corpus
 		self.target_corpus = target_corpus
 	
-	def get_q (self, alignment_counts=None, q=None, source_corpus=None, target_corpus=None, default_q=0.1):
+	def get_q (self, alignment_counts=None, q=None, default_q=0.1):
 		# calculate the aligment conditional probability
 		# default_q is p for unseen (j,i,l,m) tuple
+		# Source sentence has no null word, their index is i + 1
 
 		q = defaultdict (lambda: default_q, {}) if q is None else q
-		if alignment_counts is None and source_corpus is not None and target_corpus is not None: # initialization
-			pair_num = len (target_corpus)
+		if alignment_counts is None: # initialization
+			pair_num = len (self.target_corpus)
 			for k in range (pair_num):
-				target_sent = target_corpus[k]
-				source_sent = source_corpus[k]
+				target_sent = self.target_corpus[k]
+				source_sent = self.source_corpus[k]
 				target_sent = ['_NULL_'] + target_sent # add NULL word
 				l = len (target_sent)
 				m = len (source_sent)
 				for i in range (m):
 					for j in range (l):
-						q[(j,i+1,l,m)] = 1 / (l) # Source sentence has no null word, their index is i + 1
+						q[(j,i+1,l,m)] = 1 / (l) 
 		else: pass
 		return q
 
-	def get_t (self, word_counts=None, t=None, init_t=None, null_num=1, init_null=None):
+	def get_t (self, word_counts=None, t=None, null_num=1, init_null=None):
 		# calculate the translation conditional probability
 		t = {} if (t is None) else t
 		if word_counts is None: # initialization
@@ -100,16 +101,21 @@ class IBMModel1 ():
 		for x in range (tsent_len):
 			current_tw = tsent[x]
 			tsent_t_sum += t[sw][current_tw]
-		delta = t[sw][tw] / tsent_t_sum
+		try:
+			delta = t[sw][tw] / tsent_t_sum
+		except (err):
+			print (err)
+			for x in range (tsent_len):
+				print (tsent, tsent[x], sw, tw, t[sw][current_tw])			
 		return delta
 
-	def em_count (self, target_corpus, source_corpus, q, t, get_delta):
+	def em_count (self):
 		word_counts = defaultdict (lambda: {'count': 0, 'align': defaultdict (lambda: 0, {})}, {})
 		alignment_counts = defaultdict (lambda: {'count': 0, 'align': defaultdict (lambda: 0, {})}, {})
-		pair_num = len (source_corpus)
+		pair_num = len (self.source_corpus)
 		for k in range (pair_num):
-			target_sent = target_corpus[k]
-			source_sent = source_corpus[k]
+			target_sent = self.target_corpus[k]
+			source_sent = self.source_corpus[k]
 			null_words = ['_NULL_']
 			target_sent = null_words + target_sent 
 			l = len (target_sent)
@@ -118,7 +124,7 @@ class IBMModel1 ():
 				sw = source_sent[i]
 				for j in range (l):
 					tw = target_sent[j]
-					delta = get_delta (q, t, target_sent, sw, j, i, m=m, l=l)
+					delta = self.get_delta (self.q, self.t, target_sent, sw, j, i, m=m, l=l)
 					# update word count
 					word_counts[tw]['count'] += delta
 					word_counts[tw]['align'][sw] += delta
@@ -129,14 +135,14 @@ class IBMModel1 ():
 
 		return word_counts, alignment_counts
 
-	def estimate_translation_parameters (self, iteration=3, t=None, q=None, null_num=1, init_t=None, init_null=None):
-		self.q = self.get_q (source_corpus=self.source_corpus, target_corpus=self.target_corpus) if q is None else q
-		self.t = self.get_t (init_t=init_t) if t is None else t
+	def estimate_translation_parameters (self, iteration=3, t=None, q=None, null_num=1, init_null=None):
+		self.q = self.get_q () if q is None else q
+		self.t = self.get_t () if t is None else t
 
 		for s in range (iteration):
-			word_counts, alignment_counts = self.em_count (self.target_corpus, self.source_corpus, self.q, self.t, self.get_delta)
+			word_counts, alignment_counts = self.em_count ()
 			self.q = self.get_q (alignment_counts=alignment_counts, q=self.q)
-			self.t = self.get_t (word_counts=word_counts, t=self.t, null_num=null_num, init_null=init_null)
+			self.t = self.get_t (word_counts=word_counts, t=self.t, null_num=null_num)
 
 	def align (self, source_sent, target_sent):
 		# get the alignment vector
@@ -200,8 +206,8 @@ class IBMModel1 ():
 			manual_possible = self.evaluation.get_possible_alignments (manual_alignment)
 			manual_sure = self.evaluation.get_sure_alignments (manual_alignment)	
 			manual_sure_total += len (manual_sure)	
-			predicted_possible_total += self.evaluation.get_predicted_possible_total (manual_possible, alignment_indices)
-			predicted_sure_total += self.evaluation.get_predicted_sure_total (manual_sure, alignment_indices)	
+			predicted_sure_total += self.evaluation.get_predicted_sure_total (manual_sure, alignment_indices)
+			predicted_possible_total += self.evaluation.get_predicted_possible_total (manual_possible, alignment_indices) + predicted_sure_total
 
 		aer, recall, precision = self.evaluation.evaluate (predicted_sure_total, predicted_possible_total, alignment_total, manual_sure_total)
 		return aer, recall, precision
@@ -218,13 +224,13 @@ class Smoothed (IBMModel1):
 		self.V = len (self.source_corpus) * v_wc + v_bonus
 	
 
-	def get_t (self, word_counts=None, t=None, init_t=None, null_num=1, init_null=None):
+	def get_t (self, word_counts=None, t=None, null_num=1, init_null=None, init_reduction=1000):
 		# calculate the translation conditional probability
 		# NeedToFix: Need to assign probability mass to unseen word
 		t = {} if (t is None) else t
 		if word_counts is None: # initialization
 			random.seed ()
-			init_value = random.random ()		
+			init_value = random.random () / init_reduction		
 			t = defaultdict (lambda: defaultdict (lambda: init_value, {}), {})
 		else:
 			for tw,v in word_counts.items ():
@@ -237,6 +243,8 @@ class Smoothed (IBMModel1):
 		return t	
 
 class Heuristic (IBMModel1):
+	# NeedFix: Not the exact orginal Heuristic model. When find lrr, the model not consider words out of the currently considered sentence pair
+
 	def _get_wc (self):	
 		# get word count of each source word and the coocurrence with each of its target words	
 		sent_num = len (self.source_corpus)
@@ -271,9 +279,12 @@ class Heuristic (IBMModel1):
 
 	# NeedFix: remove negative llr
 	# NeedFix: Add n NULL word	
-	def _get_llr (self, parameters, exponent=None):
+	def _get_llr (self, parameters, exponent=None, threshold=1):
 		# get log likelihood ratio of each word pair
 		# assign the unigram p of a source word for LLR of NULL and the source word
+		# threshold: discard LLR below that value.
+		# NEEDFIX: what to do with discarded llr? how llr_p compute for such word pairs?
+
 		largest_llr_sum = 0
 		for tw, tw_v in parameters['target'].items ():
 			tw_count = tw_v['count']
@@ -284,6 +295,7 @@ class Heuristic (IBMModel1):
 				else:
 					sw_cond_tw_p = align_v['count'] / tw_count # p (fi|ei)
 					align_v['llr'] = align_v['count'] * math.log (sw_cond_tw_p / sw_priori_p)
+				if align_v['llr'] < threshold: continue 
 				align_v['llr'] = self._llr_to_exp (align_v['llr'], exponent)
 				tw_v['llr_sum'] += align_v['llr']
 			largest_llr_sum = largest_llr_sum if largest_llr_sum > tw_v['llr_sum'] else tw_v['llr_sum']
@@ -299,28 +311,29 @@ class Heuristic (IBMModel1):
 		largest_llr_sum = parameters['_stat']['target']['largest_llr_sum']
 		for tw, tw_v in parameters['target'].items ():
 			for sw, align_v in tw_v['align'].items ():
-				align_v['llr_p'] = align_v['llr'] / largest_llr_sum
+				llr = align_v['llr']
+				align_v['llr_p'] = llr / largest_llr_sum
 		return parameters
 
 	def get_init_t (self, exponent=3):
 		parameters = self._get_wc ()
 		parameters = self._get_llr (parameters, exponent)
 		parameters = self._llr_to_p (parameters)
-		return parameters
+		self.init_t = parameters
 
 	# NeedFix: review when to init_null occurs in the code. Likely when init t	
-	def get_t (self, word_counts=None, t=None, init_t=None, init_null=None, null_num=1):
+	# NeedToFix: Need to assign probability mass to unseen word
+	def get_t (self, word_counts=None, t=None, init_null=None, null_num=1, init_reduction=1000):
 		# calculate the translation conditional probability
-		# NeedToFix: Need to assign probability mass to unseen word
+		# make init t of unseen word pair smaller than in origial IBM model 1
 		t = {} if (t is None) else t
 		if word_counts is None: # initialization
 			random.seed ()
-			init_value = random.random ()		
+			init_value = random.random () / init_reduction # make the random smaller	
 			t = defaultdict (lambda: defaultdict (lambda: init_value, {}), {})
-			if init_t is not None:
-				for tw, tw_v in init_t['target'].items():
-					for sw, align_v in tw_v['align'].items():
-						t[sw][tw] = align_v['llr_p']
+			for tw, tw_v in self.init_t['target'].items():
+				for sw, align_v in tw_v['align'].items():
+					t[sw][tw] = align_v['llr_p']
 		else:
 			for tw,v in word_counts.items ():
 				tw_count = v['count']
@@ -347,7 +360,7 @@ if __name__ == '__main__':
 	scorpus = []
 	tcorpus = []
 
-	filenumber = 5
+	filenumber = 1
 
 	for i in range (filenumber):
 		with open (target_file.format (i+1)) as efd, open (source_file.format (i+1)) as ffd:
@@ -391,29 +404,29 @@ if __name__ == '__main__':
 
 	print ('- Model 1 Standard -')
 	ibm1 = IBMModel1 (scorpus, tcorpus)
-	ibm1.estimate_translation_parameters (iteration=2)
+	ibm1.estimate_translation_parameters (iteration=10)
 	aer, recall, precision = ibm1.evaluate (trial_scorpus, trial_tcorpus, trial_alignment)
 	print (aer, recall, precision)
 	print ('----END ----')
 
 	print ('- Model 1 Smoothed -')
-	added_count = 0.01
+	added_count = 10
 	v_wc=10
 	v_bonus=100
-	null_num = 3
+	null_num = 5
 	smoothed = Smoothed (scorpus, tcorpus, added_count, v_wc, v_bonus)
-	smoothed.estimate_translation_parameters (iteration=4, null_num=null_num)
+	smoothed.estimate_translation_parameters (iteration=10, null_num=null_num)
 	aer, recall, precision = smoothed.evaluate (trial_scorpus, trial_tcorpus, trial_alignment)
 	print (aer, recall, precision)
 	print ('----END ----')
 
 	print ('- Model 1 Heuristic -')
-	null_num = 3
+	null_num = 5
 	init_null = None
 	exponent = 3
 	heu = Heuristic (scorpus, tcorpus)
-	init_t = heu.get_init_t (exponent=exponent)
-	heu.estimate_translation_parameters (iteration=4, null_num=null_num, init_t=init_t, init_null=init_null)
+	heu.get_init_t (exponent=exponent)
+	heu.estimate_translation_parameters (iteration=10, null_num=null_num, init_null=init_null)
 	aer, recall, precision = heu.evaluate (trial_scorpus, trial_tcorpus, trial_alignment)
 	print (aer, recall, precision)
 	print ('----END ----')

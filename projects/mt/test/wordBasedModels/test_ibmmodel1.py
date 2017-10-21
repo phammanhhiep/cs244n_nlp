@@ -3,9 +3,9 @@ sys.path.insert (0, os.getcwd ())
 
 from collections import defaultdict
 import pytest
-import word_alignment.ibmmodel1
+import wordBasedModels.ibmmodel1
 
-AER = word_alignment.ibmmodel1.AER
+AER = wordBasedModels.ibmmodel1.AER
 
 def test_aer_get_recall (): pass
 
