@@ -103,7 +103,6 @@ class Standard:
 	def _smooth_orientation (self): pass
 
 	def decoding (self, source_sent, phrase_tran_table, stack_size=None, stack_alpha=None, best_n=None):
-		def _get_prev_stack (word_num, stacks): pass
 		translation_options = self.get_translation_options (source_sent, phrase_tran_table)
 		future_cost_table = self.get_future_cost_table (translation_options)
 		stacks = []
@@ -111,7 +110,7 @@ class Standard:
 		for s in range (stack_num):
 			word_num = s + 1
 			stacks[s] = []
-			prev_stack = _get_prev_stack (word_num, stacks) 
+			prev_stack = self._get_prev_stack (word_num, stacks) 
 			new_hypotheses = self.create_hypotheses (word_num, translation_options)
 			expanded_hypotheses = self.expanded_hypotheses (prev_stack)
 			stacks[s].extend (new_hypotheses)
@@ -121,6 +120,8 @@ class Standard:
 		best_translations = self.get_n_best_translation (stacks, best_n)
 		return best_translations
 				
+	def _get_prev_stack (self, word_num, stacks): pass	
+
 	def get_translation_options (self, source_sent, phrase_tran_table): pass		
 
 	def create_hypotheses (self, word_num, translation_options): pass
