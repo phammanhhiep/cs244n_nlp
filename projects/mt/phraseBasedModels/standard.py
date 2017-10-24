@@ -95,6 +95,42 @@ class Standard:
 				fv['tranp'] = fv['count'] / e_count
 		return phrases
 
+	def estimate_reordering_probability (self): pass
+
+	def _set_orientation (self): pass
+		# determine if a phrase is of one of three orientation types
+
+	def _smooth_orientation (self): pass
+
+	def decoding (self, source_sent, phrase_tran_table, stack_size=None, stack_alpha=None, best_n=None): pass
+		def _get_prev_stack (word_num, stacks): pass
+		translation_options = self.get_translation_options (source_sent, phrase_tran_table)
+		stacks = []
+		stack_num = len (source_sent)
+		for s in range (stack_num):
+			word_num = s + 1
+			stacks[s] = []
+			prev_stack = _get_prev_stack (word_num, stacks) 
+			new_hypotheses = self.create_hypotheses (word_num, translation_options)
+			expanded_hypotheses = self.expanded_hypotheses (prev_stack)
+			stacks[s].extend (new_hypotheses)
+			stacks[s].extend (expanded_hypotheses)
+			stacks[s] = self.prune_hypo (stacks[s], stack_size, stack_alpha)
+		best_translations = self.get_n_best_translation (stacks, best_n)
+		return best_translations
+				
+	def get_translation_options (self, source_sent, phrase_tran_table): pass		
+
+	def create_hypotheses (self, word_num, translation_options): pass
+
+	def expand_hypotheses (self): pass
+
+	def get_future_cost (self): pass
+
+	def prune_hypo (self, stack, stack_size, stack_alpha): pass
+
+	def get_n_best_translation (stacks, best_n): pass
+
 
 if __name__ == '__main__':
 	from nltk import sent_tokenize, word_tokenize
