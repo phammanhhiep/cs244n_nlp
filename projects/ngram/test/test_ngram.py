@@ -9,6 +9,7 @@ def test_ngram_count_2 ():
 	sent = ['<s>', 'I', 'am', 'robot', '.', '</s>']
 	params = defaultdict (lambda: {
 		'count': 0, 
+		'single': False,
 		2: defaultdict (lambda: {'count': 0}, {}), 
 		3: defaultdict (lambda: {'count': 0}, {})
 	}, {})
@@ -18,7 +19,8 @@ def test_ngram_count_2 ():
 
 	for k,v in params.items ():
 		assert v['count'] == 1
-		assert len (v[2]) == 1
+		if v['single'] is True:
+			assert len (v[2]) == 1
 
 def test_ngram_count_3 ():
 	sent = ['<s>', 'I', 'am', 'robot', '.', '</s>']

@@ -9,10 +9,11 @@ class Ngram:
 
 	def preprocess (self, sent, ngram=2):
 		# add <s> and </s> at the begining and end of a sentence respectively
+		new_sent = [i for i in sent]
 		for i in range (ngram - 1):
-			sent.insert (0, '<s>')
-		sent.append ('</s>')
-		return sent
+			new_sent.insert (0, '<s>')
+		new_sent.append ('</s>')
+		return new_sent
 
 	def count (self, sent, params, ngram=2):
 		# collect count of all N-grams, given a N value
@@ -49,17 +50,22 @@ class Ngram:
 		return new_sent
 
 	def train (self, ngram=2, unk_threshold=1):
-		params = defaultdict (lambda: {
-			'count': 0, 
-			'single': False, # to distinguish with combination of words
-			ngram: defaultdict (lambda: {'count': 0, 'logp': 0}, {})}, {})
+		def _gen_word_dict (ngram):
+			w = {
+				'count': 0,
+				'single': False, # to distinguish with combination of words
+			}
+			w.update ({ngram-k: defaultdict (lambda: {'count': 0, 'logp': 0}, {}) for k in range (ngram-1)})
+			return w
+		params = defaultdict (lambda: _gen_word_dict (ngram), {})
+
 		oricounts = defaultdict (lambda: {'count': 0}, {})
 
 		for sent in self.corpus:
-			sent = self.preprocess (sent, ngram)
 			oricounts = self.precount (sent, oricounts)
 		for sent in self.corpus:
 			sent = self.handle_train_unknown (sent, oricounts, unk_threshold)
+			sent = self.preprocess (sent, ngram)
 			params = self.count (sent, params, ngram)
 		params = self.estimate_logp (params, ngram)
 		return params
@@ -101,6 +107,7 @@ class Ngram:
 		logp = 0
 		N = 0
 		for sent in test_corpus:
+			sent = self.preprocess (sent)
 			sent = self.handle_test_unknown (sent, params)
 			start_index = end_index = 0
 			word_num = len (sent)
@@ -152,6 +159,11 @@ if __name__ == '__main__':
 	params = m.train (ngram)
 	pp = m.evaluate (trial_tcorpus, params, ngram)
 	print (pp)
+	c=0
+	for k,v in params.items ():
+		print (k,v)
+		c += 1
+		if c == 1: break
 
 	print ('--- Trigram ---')
 	ngram = 3
@@ -159,10 +171,20 @@ if __name__ == '__main__':
 	params = m.train (ngram)
 	pp = m.evaluate (trial_tcorpus, params, ngram)
 	print (pp)
+	c=0
+	for k,v in params.items ():
+		print (k,v)
+		c += 1
+		if c == 1: break
 
 	print ('--- Trigram ---')
 	ngram = 4
 	m = Ngram (tcorpus)
 	params = m.train (ngram)
 	pp = m.evaluate (trial_tcorpus, params, ngram)
-	print (pp)	
+	print (pp)
+	c=0
+	for k,v in params.items ():
+		print (k,v)
+		c += 1
+		if c == 1: break

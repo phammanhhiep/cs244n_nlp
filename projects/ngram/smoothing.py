@@ -11,6 +11,10 @@ class AddOne (Ngram):
 		Ngram.__init__ (self, corpus)
 
 	def estimate_logp (self, params, ngram=2):
+		# avoid estimate logp before smoothing
+		return params
+
+	def smooth (self, params, ngram=2):
 		V = len ([k for k,v in params.items () if v['single'] is True]) # vocabulary size
 		for w, w_v in params.items ():
 			if w_v['single'] is True:
@@ -21,12 +25,12 @@ class AddOne (Ngram):
 					his_v['logp'] = math.log (p)
 		return params
 
-class AddK (Ngram):
+class AddK (AddOne):
 	def __init__ (self, corpus, K=1):
-		Ngram.__init__ (self, corpus)
+		AddOne.__init__ (self, corpus)
 		self.K = K
 
-	def estimate_logp (self, params, ngram=2):
+	def smooth (self, params, ngram=2):
 		V = len ([k for k,v in params.items () if v['single'] is True]) # vocabulary size
 		for w, w_v in params.items ():
 			if w_v['single'] is True:
@@ -71,7 +75,6 @@ if __name__ == '__main__':
 	ngram = 3	
 	m = Ngram (tcorpus)
 	params = m.train (ngram)
-	params = m.smooth (params)
 	pp = m.evaluate (trial_tcorpus, params, ngram)
 	print (pp)
 
@@ -79,7 +82,7 @@ if __name__ == '__main__':
 	ngram = 3	
 	m = AddOne (tcorpus)
 	params = m.train (ngram)
-	# params = m.smooth (params)
+	params = m.smooth (params, ngram)
 	pp = m.evaluate (trial_tcorpus, params, ngram)
 	print (pp)
 
@@ -88,6 +91,6 @@ if __name__ == '__main__':
 	K = 0.000001	
 	m = AddK (tcorpus, K)
 	params = m.train (ngram)
-	# params = m.smooth (params)
+	params = m.smooth (params, ngram)
 	pp = m.evaluate (trial_tcorpus, params, ngram)
 	print (pp)
