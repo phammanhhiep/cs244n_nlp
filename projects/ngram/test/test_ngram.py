@@ -33,3 +33,5 @@ def test_ngram_count_3 ():
 
 	for k,v in params.items ():
 		assert v['count'] == 1
+
+def test_ngram_handle_unknown (): pass
