@@ -61,9 +61,10 @@ class Ngram:
 		for sent in self.corpus:
 			sent = self.handle_train_unknown (sent, oricounts, unk_threshold)
 			params = self.count (sent, params, ngram)
-
 		params = self.estimate_logp (params, ngram)
-
+		return params
+	
+	def smooth (self, params):
 		return params
 
 	def estimate_logp (self, params, ngram=2):
@@ -85,9 +86,6 @@ class Ngram:
 	def compute_pp (self, logp, N):
 		# calcualte perplexity of a N-gram
 		return -1 * logp / N
-
-	# NEEDFIX: implement it.	
-	def smooth (self, params): pass
 
 	def handle_test_unknown (self, sent, params):
 		# handle both unknown word
@@ -125,7 +123,7 @@ if __name__ == '__main__':
 	target_file = data_dir + 'hansard.36.1.house.debates.00{}.e'
 	tcorpus = []
 
-	filenumber = 4
+	filenumber = 1
 
 	for i in range (filenumber):
 		with open (target_file.format (i+1)) as efd:
