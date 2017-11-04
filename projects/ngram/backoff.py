@@ -10,7 +10,9 @@ class Backoff (Ngram):
 	def __init__ (self, corpus=None):
 		Ngram.__init__ (self, corpus)
 
-	def count (self, sent, params, ngram=2):	
+	def discount_higher_order_ngram (self): pass	
+
+	def count (self, sent, params, ngram=2):
 		# collect count of all N-grams, given a N value
 		# sent: a list of word
 		start_index = 0
@@ -36,11 +38,10 @@ class Backoff (Ngram):
 					join_count = his_v['count']
 					lower_gram = ngram - 1
 					while join_count == 0 and lower_gram > 0:
+						lower_history = ' '.join (history.split (' ')[-lower_gram:])
 						if lower_gram > 1: 
-							lower_history = history.split (' ')[lower_gram-1]
 							join_count = w_v[lower_gram][lower_history]['count']
 						else:
-							lower_history = history
 							join_count = w_v[lower_history]['count']  
 						lower_gram -= 1
 					his_count = params[history]['count']
@@ -82,22 +83,14 @@ if __name__ == '__main__':
 	ngram = 3	
 	m = Ngram (tcorpus)
 	params = m.train (ngram)
+	params = m.estimate_logp (params, ngram)
 	pp = m.evaluate (trial_tcorpus, params, ngram)
 	print (pp)
-	# c=0
-	# for k,v in params.items ():
-	# 	print (k,v)
-	# 	c += 1
-	# 	if c == 3: break
 
 	print ('--- Back off ---')
 	ngram = 3	
 	m = Backoff (tcorpus)
 	params = m.train (ngram)
+	params = m.estimate_logp (params, ngram)
 	pp = m.evaluate (trial_tcorpus, params, ngram)
 	print (pp)
-	# c=0
-	# for k,v in params.items ():
-	# 	print (k,v)
-	# 	c += 1
-	# 	if c == 3: break

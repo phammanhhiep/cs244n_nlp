@@ -26,11 +26,13 @@ class Ngram:
 			end_index = start_index + ngram - 1
 			if end_index >= word_num: break
 			w = sent [end_index]
-			history = ' '.join (sent [start_index:end_index])
 			params[w]['count'] += 1
-			params[w]['single'] = True
-			if ngram > 2 or history == '<s>': params[history]['count'] += 1 
-			params[w][ngram][history]['count'] += 1
+			params[w]['single'] = True			
+			if ngram == 1: pass
+			else:
+				history = ' '.join (sent [start_index:end_index])
+				if ngram > 2 or history == '<s>': params[history]['count'] += 1 
+				params[w][ngram][history]['count'] += 1
 		return params
 
 	def precount (self, sent, count):
@@ -48,6 +50,14 @@ class Ngram:
 			if count[w]['count'] <= unk_threshold: w = unknown_word
 			new_sent.append (w)
 		return new_sent
+
+	def count_total (self, params):
+		N = 0
+		for k,v in params.items ():
+			if v['single'] is True:
+				N += v['count']
+		params['<TOTAL>']['count'] = N
+		return params
 
 	def train (self, ngram=2, unk_threshold=1):
 		def _gen_word_dict (ngram):
@@ -67,7 +77,7 @@ class Ngram:
 			sent = self.handle_train_unknown (sent, oricounts, unk_threshold)
 			sent = self.preprocess (sent, ngram)
 			params = self.count (sent, params, ngram)
-		params = self.estimate_logp (params, ngram)
+		params = self.count_total (params)
 		return params
 	
 	def smooth (self, params):
@@ -76,18 +86,26 @@ class Ngram:
 	def estimate_logp (self, params, ngram=2):
 		for w, w_v in params.items ():
 			if w_v['single'] is True:
-				for history, his_v in w_v[ngram].items ():
-					join_count = his_v['count']
-					his_count = params[history]['count']
-					p = join_count / his_count
-					his_v['logp'] = math.log (p)
+				if ngram == 1:
+					p = w_v['count'] / params['<TOTAL>']['count'] 
+					w_v['logp'] = math.log (p)
+				else:
+					for history, his_v in w_v[ngram].items ():
+						join_count = his_v['count']
+						his_count = params[history]['count']
+						p = join_count / his_count
+						his_v['logp'] = math.log (p)
 		return params			
 
 	def log_to_p (self, logp):
 		return math.exp (logp)
 
 	def get_logp (self, params, w, history, ngram):
-		return params[w][ngram][history]['logp']
+		if ngram == 1:
+			logp = params[w]['logp']
+		else:
+			logp = params[w][ngram][history]['logp']
+		return logp
 
 	def compute_pp (self, logp, N):
 		# calcualte perplexity of a N-gram
@@ -117,7 +135,10 @@ class Ngram:
 				end_index = start_index + ngram - 1
 				if end_index >= word_num: break		
 				w = sent [end_index]
-				history = ' '.join (sent [start_index:end_index])
+				if start_index == end_index: # unigram
+					history = None
+				else:
+					history = ' '.join (sent [start_index:end_index])
 				logpi = self.get_logp (params, w, history, ngram)
 				logp += logpi
 		pp = self.compute_pp (logp, N)
@@ -153,38 +174,34 @@ if __name__ == '__main__':
 		trial_target = BeautifulSoup (efd, "lxml")
 		trial_tcorpus = extract_trial_sentences (trial_target)
 
+	print ('--- Unigram ---')
+	ngram = 1	
+	m = Ngram (tcorpus)
+	params = m.train (ngram)
+	params = m.estimate_logp (params, ngram)
+	pp = m.evaluate (trial_tcorpus, params, ngram)
+	print (pp)
+
 	print ('--- Bigram ---')
 	ngram = 2	
 	m = Ngram (tcorpus)
 	params = m.train (ngram)
+	params = m.estimate_logp (params, ngram)
 	pp = m.evaluate (trial_tcorpus, params, ngram)
 	print (pp)
-	c=0
-	for k,v in params.items ():
-		print (k,v)
-		c += 1
-		if c == 1: break
 
 	print ('--- Trigram ---')
 	ngram = 3
 	m = Ngram (tcorpus)
 	params = m.train (ngram)
+	params = m.estimate_logp (params, ngram)
 	pp = m.evaluate (trial_tcorpus, params, ngram)
 	print (pp)
-	c=0
-	for k,v in params.items ():
-		print (k,v)
-		c += 1
-		if c == 1: break
 
 	print ('--- Trigram ---')
 	ngram = 4
 	m = Ngram (tcorpus)
 	params = m.train (ngram)
+	params = m.estimate_logp (params, ngram)
 	pp = m.evaluate (trial_tcorpus, params, ngram)
 	print (pp)
-	c=0
-	for k,v in params.items ():
-		print (k,v)
-		c += 1
-		if c == 1: break
