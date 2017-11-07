@@ -59,7 +59,8 @@ def _resolve_mixed (dcount, ri, i, l, CNF_G, G, L):
 	CNF_G[l] = [i for i in G[l]]
 	for rij in ri_split:
 		if _is_mixed (rij, L):
-			dcount, dname = _gen_dummy_nonterminal (dcount)
+			dname = _get_existing_dummy (rij, L)
+			if dname is None: dcount, dname = _gen_dummy_nt (dcount)
 			L[dname] = [rij]
 			rij_index = ri_split.index (rij)
 			ri_split[rij_index] = dname
@@ -72,11 +73,12 @@ def _resolve_more2_nonterminal (dcount, ri, i, l, G, CNF):
 		if len (CNF['rules'][l]) == 0: CNF['rules'][l] = G[l] 
 		return dcount
 	CNF['rules'][l] = [i for i in G[l]] if G.get (l, None) is not None and len (CNF['rules'][l]) == 0 else CNF['rules'][l]
-	dcount, dname = _gen_dummy_nonterminal (dcount)
 	ri_split = ri.split (' ')
 	dpart = ri_split[:-1]
 	rest = ri_split[-1]
 	sub_ri = ' '.join (dpart)
+	dname = _get_existing_dummy (sub_ri, CNF['rules'])
+	if dname is None: dcount, dname = _gen_dummy_nt (dcount)	
 	CNF['rules'][dname] = [sub_ri]
 	i = CNF['rules'][l].index (ri)
 	CNF['rules'][l][i] = '{} {}'.format (dname, rest)
@@ -84,10 +86,17 @@ def _resolve_more2_nonterminal (dcount, ri, i, l, G, CNF):
 		dcount = _resolve_more2_nonterminal (dcount, sub_ri, 0, dname, G, CNF)
 	return dcount
 
-def _gen_dummy_nonterminal (dcount):
+def _gen_dummy_nt (dcount):
+	name = 'X'
 	dcount += 1
-	dname = 'Dummy_{}'.format (dcount)
+	dname = '{}{}'.format (name, dcount)
 	return dcount, dname
+
+def _get_existing_dummy (ri, G):
+	for l,r in G.items ():
+		if len (r) == 1 and ri in r and 'X' == l[0]:
+			return l
+	return None 
 
 def _resolve_unit_production (ri, l, G, CNF):
 	# assume CFG is complete. No non-terminal, if not being mapped to a word in the lexicon, has no rule

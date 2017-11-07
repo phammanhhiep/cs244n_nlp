@@ -1,6 +1,6 @@
 import os, sys
 sys.path.insert (0, os.getcwd ())
-import cfg
+import cfg.to_cnf
 
 from collections import defaultdict
 import random, math 
@@ -37,9 +37,9 @@ def test__has_unit_production ():
 		}
 	}
 
-	has_up = cfg._has_unit_production ('S', CFG['rules'])
+	has_up = cfg.to_cnf._has_unit_production ('S', CFG['rules'])
 	assert has_up is True
-	has_up = cfg._has_unit_production ('VP', CFG['rules'])
+	has_up = cfg.to_cnf._has_unit_production ('VP', CFG['rules'])
 	assert has_up is False	
 
 # @pytest.mark.skip ()
@@ -63,8 +63,8 @@ def test__resolve_unit_production_1 ():
 		'lexicon': CFG['lexicon']
 	}
 
-	cfg._resolve_unit_production ('Verb', 'S', CFG['rules'], CNF)
-	cfg._resolve_unit_production ('K', 'PP', CFG['rules'], CNF)
+	cfg.to_cnf._resolve_unit_production ('Verb', 'S', CFG['rules'], CNF)
+	cfg.to_cnf._resolve_unit_production ('K', 'PP', CFG['rules'], CNF)
 
 	assert len (CNF['lexicon']['S']) == 2
 	for i in ['x', 'y']: assert i in CNF['lexicon']['S']
@@ -97,7 +97,7 @@ def test__resolve_unit_production_1_1 ():
 		'lexicon': CFG['lexicon']
 	}
 
-	cfg._resolve_unit_production ('K', 'PP', CFG['rules'], CNF)
+	cfg.to_cnf._resolve_unit_production ('K', 'PP', CFG['rules'], CNF)
 
 	assert len (CNF['lexicon']['PP']) == 6
 	for i in ['y', 'z', 'a', 'b', 'n', 'm']: assert i in CNF['lexicon']['PP']
@@ -124,8 +124,8 @@ def test__resolve_unit_production_2 ():
 		'lexicon': CFG['lexicon']
 	}
 
-	cfg._resolve_unit_production ('VP', 'S', CFG['rules'], CNF)
-	cfg._resolve_unit_production ('Z', 'K', CFG['rules'], CNF)
+	cfg.to_cnf._resolve_unit_production ('VP', 'S', CFG['rules'], CNF)
+	cfg.to_cnf._resolve_unit_production ('Z', 'K', CFG['rules'], CNF)
 	assert len (CNF['rules']['S']) == 3
 	for t in ['Verb PP', 'Verb NP', 'VP PP']: assert t in CNF['rules']['S']
 
@@ -153,7 +153,7 @@ def test__resolve_unit_production_3 ():
 		'lexicon': CFG['lexicon']
 	}
 
-	cfg._resolve_unit_production ('VP', 'S', CFG['rules'], CNF)
+	cfg.to_cnf._resolve_unit_production ('VP', 'S', CFG['rules'], CNF)
 	for t in ['Verb PP', 'Verb NP', 'XX XX', 'MM MM', 'Z T', 'VP PP']: assert t in CNF['rules']['S']
 	for t in ['Verb PP', 'Verb NP', 'XX XX', 'MM MM', 'Z T', 'VP PP']: assert t in CNF['rules']['VP']
 	for t in ['XX XX', 'MM MM', 'Z T', 'VP PP']: assert t in CNF['rules']['K']
@@ -179,7 +179,7 @@ def test__resolve_unit_production_4 ():
 		'lexicon': CFG['lexicon']
 	}
 
-	cfg._resolve_unit_production ('VP', 'S', CFG['rules'], CNF)
+	cfg.to_cnf._resolve_unit_production ('VP', 'S', CFG['rules'], CNF)
 	assert len (CNF['rules']['S']) == 4
 	for t in ['Verb PP', 'Adverb Verb PP', 'Z T', 'VP PP']: assert t in CNF['rules']['S']
 	for t in ['Verb PP', 'Adverb Verb PP', 'Z T', 'VP PP']: assert t in CNF['rules']['VP']
@@ -198,15 +198,15 @@ def test__resolve_more2_nonterminal_ ():
 	} 
 
 	d = 0
-	d = cfg._resolve_more2_nonterminal (d, 'VP PP XX', 1, 'S', CFG['rules'], CNF)
-	d = cfg._resolve_more2_nonterminal (d, 'XX YY ZZ TT', 0, 'NP', CFG['rules'], CNF)
+	d = cfg.to_cnf._resolve_more2_nonterminal (d, 'VP PP XX', 1, 'S', CFG['rules'], CNF)
+	d = cfg.to_cnf._resolve_more2_nonterminal (d, 'XX YY ZZ TT', 0, 'NP', CFG['rules'], CNF)
 
 	assert d == 3
-	assert CNF['rules']['S'][1] == 'Dummy_1 XX'
-	assert CNF['rules']['Dummy_1'][0] == 'VP PP'
-	assert CNF['rules']['NP'][0] == 'Dummy_2 TT'
-	assert CNF['rules']['Dummy_2'][0] == 'Dummy_3 ZZ'
-	assert CNF['rules']['Dummy_3'][0] == 'XX YY'
+	assert CNF['rules']['S'][1] == 'X1 XX'
+	assert CNF['rules']['X1'][0] == 'VP PP'
+	assert CNF['rules']['NP'][0] == 'X2 TT'
+	assert CNF['rules']['X2'][0] == 'X3 ZZ'
+	assert CNF['rules']['X3'][0] == 'XX YY'
 
 def test__is_mixed ():
 	ri1 = 'XX walk YY'
@@ -216,18 +216,20 @@ def test__is_mixed ():
 		'Verb': ['run', 'walk']
 	}
 
-	assert cfg._is_mixed (ri1, L) is True
-	assert cfg._is_mixed (ri2, L) is False
+	assert cfg.to_cnf._is_mixed (ri1, L) is True
+	assert cfg.to_cnf._is_mixed (ri2, L) is False
 
 # @pytest.mark.skip ()
 def test__resolve_mixed ():
 	CFG = { # arbitrary
 		'rules': {
-			'S': ['VP', 'VP PP', 'Verb yy zz']
+			'S': ['VP', 'VP PP', 'Verb yy zz'],
+			'K': ['zz']
 		},
 		'lexicon': {
 			'Verb': ['x', 'yy'],
-			'PP': ['zz', 'y']
+			'PP': ['zz', 'y'],
+
 		}
 	}
 
@@ -237,16 +239,19 @@ def test__resolve_mixed ():
 	} 
 
 	dcount = 0
-	dcount = cfg._resolve_mixed (dcount, 'Verb yy zz', 2, 'S', CNF['rules'], CFG['rules'], CNF['lexicon'])
+	dcount = cfg.to_cnf._resolve_mixed (dcount, 'Verb yy zz', 2, 'S', CNF['rules'], CFG['rules'], CNF['lexicon'])
+	dcount = cfg.to_cnf._resolve_mixed (dcount, 'zz', 0, 'K', CNF['rules'], CFG['rules'], CNF['lexicon'])	
+
 	assert dcount == 2
-	CNF['lexicon']['Dummy_1'][0] == 'yy'
-	CNF['lexicon']['Dummy_2'][0] == 'zz'
-	CNF['rules']['S'][2] = 'Verb Dummy_1 Dummy_2'
+	CNF['lexicon']['X1'][0] == 'yy'
+	CNF['lexicon']['X2'][0] == 'zz'
+	CNF['rules']['S'][2] = 'Verb X1 X2'
+	CNF['rules']['K'][0] = 'X2'
 
 # @pytest.mark.skip ()
 def test_to_CNF (CFG):
-	CNF = cfg.to_CNF (CFG)
-	assert len (CNF['rules']) == 12
+	CNF = cfg.to_cnf.to_CNF (CFG)
+	assert len (CNF['rules']) == 11
 	assert len (CNF['rules']['S']) == 5
 	assert len (CNF['lexicon']['S']) == 3
 	for nt in CNF['rules']['S']: assert len (nt.split (' ')) == 2
