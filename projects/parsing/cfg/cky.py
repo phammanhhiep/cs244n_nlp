@@ -24,6 +24,7 @@ class CKY:
 			if w in v:
 				if table[j-1][j] is None: table[j-1][j] = []
 				table[j-1][j].append (CKY._gen_entry (k))
+				CKY._handle_up (table, j-1, j, k, G['rules'])
 
 	@staticmethod			
 	def _collect_constituents (j, words, G, table):
@@ -47,6 +48,15 @@ class CKY:
 								leftr, leftl, leftri = i, k, left.index (li)
 								rightr, rightc, rightri = k, j, right.index (ri)
 								table[i][j].append (CKY._gen_entry (l, leftr, leftl, leftri, rightr, rightc, rightri))
+								CKY._handle_up (table, i, j, l, G['rules'])
+
+	def _handle_up (table, i, j, l, rules): 
+		# insert all left-side non-terminals of ups given the right-side non-terminal
+		entry_index = len (table[i][j]) - 1 # index of l
+		for k,r in rules.items ():
+			for nt in r:
+				if len (nt.split (' ')) == 1 and l == nt:
+					table[i][j].append (CKY._gen_entry (k, i, j, entry_index)) # no right nt
 
 	@staticmethod
 	def _gen_parse_table (words):
@@ -62,7 +72,5 @@ class CKY:
 		return {l: [[leftr, leftl, leftri], [rightr, rightc, rightri]]}
 
 
-
-
-class CKY1 (CKY):
+class CKY1 (CKY): pass
 	# variant of CKY. Dealing with unit producition directly
