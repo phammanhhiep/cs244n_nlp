@@ -44,6 +44,9 @@ class CKY:
 						possible_nt ='{} {}'.format (li_nt, ri_nt)
 						for l,nt in G['rules'].items ():
 							if possible_nt in nt: 
+								print (i, k, j)
+								print (l, possible_nt, nt)
+								print ('end')
 								if table[i][j] is None: table[i][j] = []
 								leftr, leftl, leftri = i, k, left.index (li)
 								rightr, rightc, rightri = k, j, right.index (ri)

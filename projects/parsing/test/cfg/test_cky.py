@@ -1,6 +1,6 @@
 import os, sys
 sys.path.insert (0, os.getcwd ())
-import cfg.cky, cfg.to_cnf
+import cfg.cky, cfg.cnf
 
 from collections import defaultdict
 import random, math 
@@ -31,13 +31,13 @@ def CFG ():
 
 @pytest.fixture
 def CNF (CFG):
-	CNF = cfg.to_cnf.to_CNF (CFG)
+	CNF = cfg.cnf.CNF.to_CNF (CFG)
 	return CNF
 
 @pytest.fixture
 def up_CNF (CFG):
 	# CNF without handling up
-	CNF = cfg.to_cnf.to_CNF (CFG, up=False)
+	CNF = cfg.cnf.CNF.to_CNF (CFG, up=False)
 	return CNF
 
 def test__create_parse_table (): pass
@@ -59,7 +59,7 @@ def test__collect_pos (CNF):
 	nt_list = [list (l.keys())[0] for l in table[3][4]]
 	for i in ['Preposition']: assert i in nt_list
 
-# @pytest.mark.skip ()
+@pytest.mark.skip ()
 def test_recognize_1 (CNF):
 	# CNF
 	words = ['book', 'the', 'flight', 'through', 'Houston']
