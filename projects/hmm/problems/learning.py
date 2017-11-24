@@ -1,0 +1,1 @@
+# Given a set of possible hidden states and a sequence of observation, learn the parameters A, B of HMM 

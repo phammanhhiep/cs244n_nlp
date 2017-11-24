@@ -1,59 +1,79 @@
 # Given a HMM Lambda = (A,B), and observation sequence O, determin most probable sequence of hidden states
 
-def decode (L, O):
-	N = len (L['B'].keys ()) # excluding start and end states
-	T = len (L['B'][1])	
-	viterbi = [[-1] * (T + 1) for i in range (N + 2)]
-	backpointers = [[-1] * (T + 1) for i in range (N + 2)] # the list could store more than one best paths. But in the application, store only one path. Still use 2-dimension list to be consistent with other applications 
+class Decoder:
+	# O is original without adding start-symbol and end-symbol
+	@classmethod
+	def decode (cls, L, O, endsymbol='</s>', startsymbol='<s>'):
+		T = len (O) # Number of observations, including start symbol and end symbol  	
+		viterbi = {k:([-1] * (T + 1)) for k in L['A'].keys ()}
+		backpointers = {k:([-1] * (T+1)) for k in L['A'].keys ()}
 
-	t = 1
-	for s in range (1, N + 1):
-		max_s_prime = estimate_forward_p (viterbi, s, t, L, O)
-		set_pointer (s, max_s_prime, t, backpointers)
+		cls.init_viterbi (L, O, viterbi, backpointers, startsymbol, endsymbol)
+		cls.iterate_viterbi (L, O, viterbi, backpointers, startsymbol, endsymbol)
+		max_path, max_p = cls.terminate_viterbi (L, O, viterbi, backpointers, startsymbol, endsymbol)
+		return max_path, max_p
 
-	for t in range (2, T + 1):
-		for s in range (1, N + 1):
-			max_s_prime = estimate_forward_p (viterbi, s, t, L, O)
-			set_pointer (s, max_s_prime, t, backpointers)
+	@classmethod
+	def init_viterbi (cls, L, O, viterbi, backpointers, startsymbol, endsymbol):
+		# not initalize start-symbol itself and a transition from start symbol to end symbol.
+		t = 1
+		for s in L['A'].keys ():
+			if s in [startsymbol, endsymbol]: continue
+			max_s_prime = cls.estimate_forward_p (viterbi, s, t, L, O, startsymbol, endsymbol)
+			cls.set_pointer (s, max_s_prime, t, t-1, backpointers)		
+
+	@classmethod
+	def iterate_viterbi (cls, L, O, viterbi, backpointers, startsymbol, endsymbol):
+		# select the best path which has most probable sequence, including the end symbol. 
+		T = len (O)
+		for t in range (2, T + 1):
+			for s in L['A'].keys ():
+				if s in [startsymbol, endsymbol]: continue
+				max_s_prime = cls.estimate_forward_p (viterbi, s, t, L, O, startsymbol, endsymbol)
+				cls.set_pointer (s, max_s_prime, t, t-1, backpointers)		
 	
-	max_p, max_s_prime = get_max_viterbi (viterbi, t)
-	set_pointer (0, max_s_prime, t, backpointers)
-	return get_max_path (backpointers, viterbi)
+	@classmethod
+	def terminate_viterbi (cls,L, O, viterbi, backpointers, startsymbol, endsymbol):
+		# last_t is the index of end symbol
+		last_t = len (O)
+		max_s_prime = cls.estimate_forward_p (viterbi, endsymbol, last_t, L, O, startsymbol, endsymbol)
+		max_p = viterbi[endsymbol][last_t]
+		cls.set_pointer (endsymbol, max_s_prime, last_t, last_t, backpointers)
+		max_path = cls.get_max_path (backpointers, viterbi)
+		return max_path, max_p
 
-def set_pointer (s, max_s_prime, t, backpointers):
-	backpointers[s][t] = (max_s_prime, t)
+	@staticmethod	
+	def set_pointer (s, max_s_prime, t, t_prime, backpointers):
+		backpointers[s][t] = (max_s_prime, t_prime)
 
-def estimate_forward_p (viterbi, s, t, L, O):
-	max_p, max_s_prime = get_max_viterbi (viterbi, t-1)
-	Oi = O[t]
-	viterbi[s][t] = max_p * L['A'][max_s_prime][s] * L['B'][s][Oi]
-	return max_s_prime 
+	@staticmethod	
+	def estimate_forward_p (viterbi, s, t, L, O, startsymbol='<s>', endsymbol='</s>'):
+		Ot = O[t-1]
+		if t - 1 > 0 and s != endsymbol:
+			state_list = [i for i in L['A'].keys () if i not in [startsymbol, endsymbol]]
+			possible_forward_p = list (map (lambda x: viterbi[x][t-1] * L['A'][s]['cond'][x]['prob'] * L['B'][Ot]['cond'][s]['prob'], state_list))
+			max_p = max (possible_forward_p)
+			max_trellis_index = possible_forward_p.index (max_p)
+			max_s_prime = state_list[max_trellis_index]
+			viterbi[s][t] = max_p
+		elif t - 1 >= 0 and s == endsymbol:
+			max_s_prime = max (viterbi, key=lambda x: viterbi[x][t])
+			viterbi[s][t] = viterbi[max_s_prime][t]	
+		elif t - 1 == 0:
+			max_s_prime = startsymbol
+			viterbi[s][t] = L['A'][s]['cond'][max_s_prime]['prob'] * L['B'][Ot]['cond'][s]['prob']
+		return max_s_prime
 
-def get_max_viterbi (viterbi, t):
-	max_p, max_s_prime = None, None
-	if t != 0:
-		max_cell = max (viterbi, key=lambda x: x[t])
-		max_s_prime = viterbi.index (max_cell)
-		max_p = max_cell[t]
-	else:
-		max_p = 1
-		max_s_prime = 0
-	return max_p, max_s_prime		
-
-def get_max_path (pointers, viterbi):
-	tnum = len (pointers[0])
-	last_s, last_t = pointers[0][-1]
-	max_path = []
-	p = 1
-	cur_s = last_s
-	cur_t = last_t
-
-	for t in range (1, tnum-1):
-		p *= viterbi[cur_s][cur_t]
-		max_path.insert (0, cur_s)
-		cur_s, cur_t = pointers[cur_s][cur_t]
-	max_path.insert (0, 0) # the start state
-	return max_path, p
+	@staticmethod	
+	def get_max_path (pointers, viterbi, endsymbol='</s>', startsymbol='<s>'):
+		tnum = len (pointers[endsymbol])
+		max_path = []
+		cur_s = endsymbol
+		cur_t = -1
+		for t in range (1, tnum):
+			cur_s, cur_t = pointers[cur_s][cur_t]
+			max_path.insert (0, cur_s)
+		return max_path	
 
 
 
