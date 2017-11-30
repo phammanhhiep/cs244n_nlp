@@ -1,9 +1,8 @@
 import os,sys
 sys.path.insert (0, os.getcwd ())
 import pytest, math
-import topic_classifier
-
-TC = topic_classifier.Topic_Classifier
+from topic_classifiers.nbclassifier import NBClassifier
+TC = NBClassifier
 
 # pytest.mark.skip ()
 def test_train (): pass

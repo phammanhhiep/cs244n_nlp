@@ -1,7 +1,7 @@
-import random, math
+import random, math, time
 from collections import defaultdict
 
-class Topic_Classifier:
+class NBClassifier:
 	# Topic classification using Naive Bayes classifier
 	# Estimate parameters using MLE
 	# Multi-label classification - classify an item to more than one topic
@@ -89,49 +89,94 @@ class Topic_Classifier:
 			notc_log += cparam['features'][w]['notc_log']
 		return c_log, notc_log
 
-	def evaluate (topics, pred_topics):
-		accuracy = recall = precise = F = 0
-		dnum = len (topics) 
-		if dnum != len (pred_topics): raise Exception ('Not match document length')
+	@classmethod	
+	def evaluate (cls, Y, Z):
+		# Y: actual topics; Z: predicted topics
+		# example-based.
+		dnum = len (Y) 
+		if dnum != len (Z): raise Exception ('Not match document length')
+		total_YZ = total_Y = total_Z = match_YZ = 0
 		for i in range (dnum):
-			pass
-			# STOP here. Need to reasearch about measure metrics	
+			Yi = Y[i]
+			Zi = Z[i]
+			total_YZ += len (Yi) + len (Zi)
+			total_Y += len (Yi)
+			total_Z += len (Zi)
+			match_YZ += len (set (Yi).intersection (set (Zi)))
+		return cls.compute_metric (dnum, total_YZ, total_Y, total_Z, match_YZ)
+
+	@staticmethod	
+	def compute_metric (n, total_YZ, total_Y, total_Z, match_YZ):
+		accuracy = (match_YZ / total_YZ) / n
+		precision = (match_YZ / total_Z) / n if total_Z > 0 else 'N/A'
+		recall = (match_YZ / total_Y) / n
+		F1 = 2 * (match_YZ / total_YZ) / n
+		return accuracy, precision, recall, F1
 
 	def cv (): pass
 
+class Toolkit:
+	@staticmethod
+	def random_pick (content, num):
+		tr_num = len (content)
+		tr_num = math.floor(tr_num * num)
+		train = random.sample (content, tr_num)
+		test = [i for i in content if i not in train]
+		return train, test
 
-def preprocess (content):
-	new_content = []
-	topic = []
-	blist = ['\\n', '\\t']
-	for sent in content:
-		for i in blist:
-			sent = sent.replace (i, '')
-		sent = sent.strip ()
-		c = sent[:sent.index ('<')-1].strip ().split (' ')
-		t = sent[sent.index ('<') + 1:-1].strip ().split ('-')
-		n = [c,t]
-		new_content.append (n)
-	return new_content
+	@staticmethod
+	def timeit_start ():
+		return time.time()
 
-def random_pick (content, num):
-	tr_num = len (content)
-	tr_num = math.floor(tr_num * num)
-	train = random.sample (content, tr_num)
-	test = [i for i in content if i not in train]
-	return train, test
+	@staticmethod
+	def timeit (start):
+		return time.time () - start
 
 if __name__ == '__main__': 
-	fname = 'source_data/gs_conversation'
+	time_start = Toolkit.timeit_start ()
+	from bs4 import BeautifulSoup as BS
+	from nltk import word_tokenize
+	ori_docs = ''
+	filename = 'source_data/reuters21578/reut2-{}.sgm'
+	filenum = 0
+	filenum_prefix = '00{}' if filenum <= 9 else '0{}'
+	filenum = filenum_prefix.format (filenum)
+	filename = filename.format (filenum)
+	with open (filename) as fd:
+		ori_docs = fd.read ()
+	ori_docs = BS (ori_docs, 'lxml')
 	docs = []
-	with open (fname) as fd:
-		docs = [i for i in fd]
-	new_docs = preprocess (docs)
-	trainset, testset = random_pick (new_docs, 0.8)
+	for d in ori_docs.find_all ('reuters'):
+		if d['topics'] == 'YES':
+			topic = [i.text for i in d.find ('topics').find_all ('d')]
+			content = d.find('text')
+			if content.find('body'):
+				content = content.find('body').text
+			else:
+				if content.find ('author'): content.find ('author').decompose ()
+				if content.find ('title'): content.find ('title').decompose ()
+				if content.find ('dateline'): content.find ('dateline').decompose ()
+				content = content.text
+			content = word_tokenize (content)
+			docs.append ([content, topic])
 
-	params = Topic_Classifier.train (trainset)
-	labels = Topic_Classifier.classify (testset, params)
+	print ('- done preprocess: {} s'.format (Toolkit.timeit (time_start)))		
+	time_start = Toolkit.timeit_start ()
 
-	for i in range (len (labels)):
-		print (testset[i], labels[i])
+	trainset, testset = Toolkit.random_pick (docs, 0.9)
+	params = NBClassifier.train (trainset[:])
+
+	print ('- done train: {} s'.format (Toolkit.timeit (time_start)))		
+	time_start = Toolkit.timeit_start ()	
+
+	testset = testset[:]
+	predicted_labels = NBClassifier.classify (testset, params)
+
+	print ('- done classify: {} s'.format (Toolkit.timeit (time_start)))		
+	time_start = Toolkit.timeit_start ()
+
+	labels = [t[1] for t in testset]
+	accuracy, precision, recall, F1 = NBClassifier.evaluate (labels, predicted_labels)
+	print ('- done evaluate: {} s'.format (Toolkit.timeit (time_start)))
+	print ('accuracy: {}, precision: {}, recall: {}, F1: {}'.format (accuracy, precision, recall, F1))	
 
