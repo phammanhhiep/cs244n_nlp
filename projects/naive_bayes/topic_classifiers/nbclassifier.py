@@ -1,5 +1,8 @@
 import random, math, time
 from collections import defaultdict
+import os, sys
+sys.path.insert (0, os.getcwd ())
+from feature_clustering.hierarchical import Hierarchical as FC
 
 class NBClassifier:
 	# Topic classification using Naive Bayes classifier
@@ -7,7 +10,7 @@ class NBClassifier:
 	# Multi-label classification - classify an item to more than one topic
 
 	@classmethod
-	def train (cls, docs):
+	def train (cls, docs, clusters=None, V=None):
 		params = cls.count_params (docs)
 		params = cls.estimate_params (params)
 		return params
@@ -16,6 +19,7 @@ class NBClassifier:
 	def count_params (docs):
 		params = {
 			'C': defaultdict (lambda: {'d_count': 0, 'f_count': 0, 'notc_d_count': 0, 'notc_f_count': 0, 'features': defaultdict(lambda: {'count': 0, 'notc_count': 0, 'log': 0, 'notc_log': 0}, {})}, {}),
+			'V': defaultdict(lambda: {'count': 0, 'log': 0}, {})
 			'_stat_': {'doc': {'count': 0}, 'V': {'count': 0}}
 		}
 		V = []
@@ -31,15 +35,17 @@ class NBClassifier:
 					params['C'][c]['f_count'] += 1
 					params['C'][c]['features'][w]['count'] += 1
 			V = list (set (V))
+			for w in ws:
+				params['V'][w]['count'] += 1
 		params['_stat_']['V']['count'] = len (V)
 
 		for c,cv in params['C'].items ():
-			cl = [i for i in params['C'].keys () if i != c]
+			cl = [i for i in params['C'].keys () if i != c] # all classes except the class in question
 			for d in docs:
 				ws = d[0]
 				cs = d[1]
-				exist = sum([i in cs for i in cl])
-				if exist > 0:
+				exist = sum([i in cs for i in cl]) # exist classes other than the class in question
+				if exist > 0: # consider all other classes labeled as one big class.
 					params['C'][c]['notc_d_count'] += 1
 					for w in ws:
 						V.append (w)
@@ -54,9 +60,17 @@ class NBClassifier:
 			vc['log'] = math.log (vc['d_count'] / params['_stat_']['doc']['count'])
 			vc['notc_log'] = math.log (vc['notc_d_count'] / params['_stat_']['doc']['count'])
 			for f,vf in vc['features'].items ():
-				vf['log'] = math.log((vf['count'] + 1) / (vc['f_count'] + params['_stat_']['V']['count']))
-				vf['notc_log'] = math.log((vf['notc_count'] + 1) / (vc['notc_f_count'] + params['_stat_']['V']['count']))
-		return params	
+				vf['prob'] = (vf['count'] + 1) / (vc['f_count'] + params['_stat_']['V']['count'])
+				vf['notc_prob'] = (vf['notc_count'] + 1) / (vc['notc_f_count'] + params['_stat_']['V']['count'])
+				vf['log'] = math.log(vf['prob'])
+				vf['notc_log'] = math.log(vf['notc_prob'])
+		for w in vw in params['V'].items ():
+			vw['prob'] = vw['count'] / params['_stat_']['V']['count']
+		return params
+
+	def estimate_cluster_params (V, clusters, params): pass
+		# NOT sure if need such function. Need to read more about method to use cluster in text classification
+
 
 	@staticmethod	
 	def handle_unknown (ws, params):
@@ -65,14 +79,16 @@ class NBClassifier:
 	
 	@classmethod
 	def classify (cls, docs, params):
+		# classify if a document is labeled to belong a class separately
+		# one document could belong to more than one class
 		labels = []
 		for ds in docs:
 			ws = ds[0]
 			c_list = []
 			params = cls.handle_unknown (ws, params)	
-			for c,cv in params['C'].items ():
+			for c,cv in params['C'].items (): 
 				c_log, notc_log = cls.estimate_log_c (ws, cv)
-				if c_log >= notc_log: # consider if to label when the two values equal
+				if c_log >= notc_log: # FIX: consider if to label when the two values equal
 					c_list.append (c)
 			labels.append (c_list)
 		return labels
@@ -163,8 +179,15 @@ if __name__ == '__main__':
 	print ('- done preprocess: {} s'.format (Toolkit.timeit (time_start)))		
 	time_start = Toolkit.timeit_start ()
 
-	trainset, testset = Toolkit.random_pick (docs, 0.9)
-	params = NBClassifier.train (trainset[:])
+	############# Feature clustering #################
+	h = Hierarchical (KL2Mean, 5)
+	V,C = h.extract_metadata (trainset)	
+	clusters = h.cluster (trainset, V, C)
+	############# Feature clustering #################
+
+	trainset, testset = Toolkit.random_pick (docs, 0.5)
+	trainset = trainset[:]
+	params = NBClassifier.train (trainset, clusters, V)
 
 	print ('- done train: {} s'.format (Toolkit.timeit (time_start)))		
 	time_start = Toolkit.timeit_start ()	
